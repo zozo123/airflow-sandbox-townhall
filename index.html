@@ -224,6 +224,7 @@
       <span class="who">— Airflow security model docs. Mitigation: code review.</span>
     </blockquote>
     <p class="body">That model assumes a human wrote and reviewed every task. With the <b style="color:var(--ink)">common.ai</b> provider, agents now <em>generate</em> task code at runtime — and <code>code_mode</code>’s <code>run_code</code> executes it <b style="color:var(--red)">in-process on the worker, with the worker’s credentials</b>. Untrusted by construction; reviewed by no one.</p>
+    <p class="body" style="margin-top:1.6vh">And agents read the outside world — documents, APIs, web pages. An LLM can’t tell instructions from data, so <em>anything the agent reads can steer the code it writes</em> (prompt injection). A sandbox shrinks that blast radius to one disposable, credential-free VM.</p>
   </div>
   <p class="footline">airflow.apache.org/docs/…/security/security_model.html</p>
 </section>
@@ -327,16 +328,16 @@
 <span class="cm"># UNKNOWN ≠ GONE — transient API blips never kill a healthy task</span></pre>
     <div class="backends">
       <div class="be">local<small>subprocess · no creds · dev</small></div>
-      <div class="be">Daytona<small>sub-90 ms create (vendor, best case) · hot snapshots</small></div>
+      <div class="be">Daytona<small>sub-90 ms create (vendor, best case) · snapshots</small></div>
       <div class="be">E2B<small>Firecracker · ~150 ms create</small></div>
       <div class="be">Modal<small>gVisor · memory snapshots</small></div>
-      <div class="be">islo<small>microVM · pause/resume · islo.dev</small></div>
+      <div class="be">islo<small>ours — Incredibuild · microVM · islo.dev</small></div>
     </div>
     <p class="kicker" style="margin:2.6vh 0 1vh">Same shape across the ecosystem — any backend can plug in</p>
     <div class="backends" style="margin-top:0">
       <div class="be">Tensorlake<small>“sandbox-native cloud for agents” · fork/suspend microVMs</small></div>
       <div class="be">AWS Lambda MicroVMs<small>Firecracker · “near-instant launch/resume” · new Jun 2026</small></div>
-      <div class="be">crabbox.sh<small>OSS contract · lease → sync → run → release · 50+ backends</small></div>
+      <div class="be">crabbox.sh<small>OSS contract · lease → sync → run → release · dozens of backends</small></div>
     </div>
   </div>
   <p class="footline">Config: <code>[sandbox] provider = local|daytona|e2b|modal|islo</code> — or any <code>module:Class</code> path · contract mirrors crabbox’s (MIT)</p>
@@ -362,7 +363,8 @@
 
     train()</pre>
     <div>
-      <pre><span class="cm"># airflow.cfg</span>
+      <pre><span class="cm"># airflow.cfg — all-in; or opt in</span>
+<span class="cm"># per task via AIP-61 multi-executor</span>
 [core]
 executor = SandboxExecutor
 
@@ -371,6 +373,7 @@ provider = e2b
 poll_interval = 5
 creation_batch_size = 8</pre>
       <p class="body" style="margin-top:1.6em;font-size:.9em"><code>@task.sandbox</code> mirrors <code>@task.bash</code>: the callable returns the shell command that runs <em>inside</em> the ephemeral sandbox. Requires remote logging — logs ship from the sandbox, not the worker.</p>
+      <p class="body" style="margin-top:1em;font-size:.82em;color:var(--ink-3)">Status: draft PR under community discussion · standalone executor: github.com/zozo123/airflow-provider-sandbox</p>
     </div>
   </div>
 </section>
@@ -404,7 +407,7 @@ creation_batch_size = 8</pre>
       <span class="tag go">today, zero airflow changes</span>
       <ul class="plain">
         <li>gVisor / Kata via <code>runtimeClassName</code> in a KubernetesExecutor <code>pod_override</code></li>
-        <li>gVisor: no KVM needed, ~5–20% syscall overhead — GKE Sandbox is the managed flavor</li>
+        <li>gVisor: no KVM needed; overhead is workload-dependent (low for compute-bound, higher for syscall-heavy I/O) — GKE Sandbox is the managed flavor</li>
         <li>Route only sensitive tasks there with multiple executors (AIP-61)</li>
       </ul>
     </div>
