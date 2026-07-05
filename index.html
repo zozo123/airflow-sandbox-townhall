@@ -232,8 +232,8 @@
     <blockquote>“Airflow lacks native sandboxing mechanisms… DAG authors can execute arbitrary code on workers.”
       <span class="who">— Airflow security model docs. Mitigation: code review.</span>
     </blockquote>
-    <p class="body">That model assumes a human wrote and reviewed every task. With the <b style="color:var(--ink)">common.ai</b> provider, agents now <em>generate</em> task code at runtime — and <code>code_mode</code>’s <code>run_code</code> executes it <b style="color:var(--red)">in-process on the worker, with the worker’s credentials</b>. Untrusted by construction; reviewed by no one.</p>
-    <p class="body" style="margin-top:1.6vh">Agents also read the outside world — and an LLM can’t tell instructions from data: <em>anything it reads can steer the code it writes</em> (prompt injection). A sandbox shrinks the blast radius to one disposable, credential-free VM.</p>
+    <p class="body">That model assumed a human wrote and reviewed every task. With the <b style="color:var(--ink)">common.ai</b> provider, AI agents now write task code at runtime — and Airflow runs it <b style="color:var(--red)">on the worker, with the worker’s credentials</b>, reviewed by no one.</p>
+    <p class="body" style="margin-top:1.6vh">Agents also read the outside world, and an LLM can’t tell instructions from data — <em>anything it reads can steer the code it writes</em>. The fix: a <b style="color:var(--ink)">sandbox</b> — a tiny, throwaway computer per task try, deleted when the task ends.</p>
   </div>
   <p class="footline">airflow.apache.org/docs/…/security/security_model.html</p>
 </section>
@@ -242,6 +242,7 @@
 <section class="slide">
   <p class="kicker">02 · Where Airflow stands, mid-2026</p>
   <h2>AIP-72 built a <em>credential</em> boundary — not a sandbox</h2>
+  <p class="body" style="margin-top:-1.5vh;margin-bottom:2vh;font-size:.88em;color:var(--ink-3)">AIP = Airflow Improvement Proposal — how the community designs and votes on big changes.</p>
   <div class="grow">
     <table>
       <tr><th>Mechanism</th><th>Actual boundary</th><th>Isolation</th></tr>
@@ -309,13 +310,12 @@
   <p class="kicker">06 · The proposal — PR #68847</p>
   <h2>One ephemeral sandbox <em>per task try</em></h2>
   <div class="grow">
-    <p class="body" style="margin-bottom:2.5vh;font-family:var(--serif);font-size:clamp(17px,1.6vw,25px);color:var(--ink);max-width:none">A sandbox is a tiny, throwaway computer: created for one task try, deleted when it ends.</p>
     <div class="flow">
       <div class="node b"><h4>Scheduler</h4><p>Queues task tries exactly as today. No core changes — rides AIP-51’s public executor interface.</p></div>
       <div class="arrow">→</div>
       <div class="node t"><h4>SandboxExecutor</h4><p>Creates a sandbox per try, uploads the workload, then only reconciles <em>exit state</em> via a polling watcher.</p></div>
       <div class="arrow">→</div>
-      <div class="node g"><h4>MicroVM sandbox</h4><p>Task SDK supervisor runs <em>inside</em>: heartbeats + logs go straight to the api-server — EdgeExecutor topology, not a DB-coupled watcher.</p></div>
+      <div class="node g"><h4>MicroVM sandbox</h4><p>The task reports its own heartbeats and logs straight back to Airflow (EdgeExecutor-style) — no extra plumbing on the worker.</p></div>
       <div class="arrow">→</div>
       <div class="node r"><h4>Destroy</h4><p>Task ends, sandbox dies. Nothing to clean, nothing to leak into the next try.</p></div>
     </div>
@@ -382,7 +382,7 @@ executor = SandboxExecutor
 provider = e2b
 poll_interval = 5
 creation_batch_size = 8</pre>
-      <p class="body" style="margin-top:1.6em;font-size:.9em"><code>@task.sandbox</code> mirrors <code>@task.bash</code>: the callable returns the shell command that runs <em>inside</em> the ephemeral sandbox. Requires remote logging — logs ship from the sandbox before it dies, so every try leaves a complete, immutable execution record.</p>
+      <p class="body" style="margin-top:1.6em;font-size:.9em">The callable returns the shell command that runs <em>inside</em> the sandbox; logs ship out before it dies, so every try leaves a complete record.</p>
       <p class="body" style="margin-top:1em;font-size:.82em;color:var(--ink-3)">Status: draft PR under community discussion · standalone executor: github.com/zozo123/airflow-provider-sandbox</p>
     </div>
   </div>
@@ -409,7 +409,7 @@ creation_batch_size = 8</pre>
       <span class="tag hot">still open</span>
       <ul class="plain">
         <li>DAG processor &amp; Triggerer still hold DB credentials</li>
-        <li>No per-task least-privilege secrets scoping yet — JWT identity enables it; ACLs are future work</li>
+        <li>Tasks can still read every secret their deployment can — per-task scoping is future work</li>
         <li>Snapshot sharp edges: TCP connections die, cloned entropy needs VMGenID, GPU state largely unsnapshottable</li>
       </ul>
     </div>
@@ -417,7 +417,7 @@ creation_batch_size = 8</pre>
       <span class="tag go">today, zero airflow changes</span>
       <ul class="plain">
         <li>gVisor / Kata via <code>runtimeClassName</code> in a KubernetesExecutor <code>pod_override</code></li>
-        <li>gVisor: no KVM needed; overhead is workload-dependent (low for compute-bound, higher for syscall-heavy I/O) — GKE Sandbox is the managed flavor</li>
+        <li>gVisor (Google’s sandboxed container runtime) runs on any K8s cluster today — no special hardware, modest overhead; GKE Sandbox is the managed flavor</li>
         <li>Route only sensitive tasks there with multiple executors (AIP-61)</li>
       </ul>
     </div>
