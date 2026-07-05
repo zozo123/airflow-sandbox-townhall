@@ -287,10 +287,11 @@
       <li><b>Modal:</b> <code>import torch</code> — ~5 s cold → <b class="num">~1.05 s</b> from a memory snapshot.</li>
       <li><b>Cognition (Devin):</b> 20 GB machine snapshot — ~30 min → <b class="num">~200 ms</b> with blockdiff.</li>
       <li><b>Morph:</b> fork a <em>running</em> VM — processes, memory, in-flight state — in <b class="num">&lt; 250 ms</b>.</li>
+      <li><b>AWS Bedrock AgentCore:</b> every session gets a dedicated Firecracker microVM — never reused, memory sanitized on exit. “One task, one VM” is now an AWS-managed primitive.</li>
       <li><b>Copy-on-write economics:</b> N forks ≈ 1 parent’s memory + deltas. One-sandbox-per-task becomes affordable.</li>
     </ul>
   </div>
-  <p class="footline">modal.com/blog/mem-snapshots · cognition.ai blockdiff · morph.so/blog/infinibranch</p>
+  <p class="footline">modal.com/blog/mem-snapshots · cognition.ai blockdiff · morph.so/blog/infinibranch · aws.amazon.com/bedrock/agentcore</p>
 </section>
 
 <!-- ─────────────────────────── 7 · THE PROPOSAL ─────────────────────────── -->
@@ -326,13 +327,19 @@
 <span class="cm"># UNKNOWN ≠ GONE — transient API blips never kill a healthy task</span></pre>
     <div class="backends">
       <div class="be">local<small>subprocess · no creds · dev</small></div>
-      <div class="be">Daytona<small>container · sub-90 ms (vendor, best case)</small></div>
+      <div class="be">Daytona<small>sub-90 ms create (vendor, best case) · hot snapshots</small></div>
       <div class="be">E2B<small>Firecracker · ~150 ms create</small></div>
       <div class="be">Modal<small>gVisor · memory snapshots</small></div>
-      <div class="be">islo<small>microVM · pause/resume</small></div>
+      <div class="be">islo<small>microVM · pause/resume · islo.dev</small></div>
+    </div>
+    <p class="kicker" style="margin:2.6vh 0 1vh">Same shape across the ecosystem — any backend can plug in</p>
+    <div class="backends" style="margin-top:0">
+      <div class="be">Tensorlake<small>“sandbox-native cloud for agents” · fork/suspend microVMs</small></div>
+      <div class="be">AWS Bedrock AgentCore<small>one microVM per session · sanitized on exit</small></div>
+      <div class="be">crabbox.sh<small>OSS contract · lease → sync → run → release · 50+ backends</small></div>
     </div>
   </div>
-  <p class="footline">Config: <code>[sandbox] provider = local|daytona|e2b|modal|islo</code> — or any <code>module:Class</code> path</p>
+  <p class="footline">Config: <code>[sandbox] provider = local|daytona|e2b|modal|islo</code> — or any <code>module:Class</code> path · contract mirrors crabbox’s (MIT)</p>
 </section>
 
 <!-- ─────────────────────────── 9 · CODE ─────────────────────────── -->
