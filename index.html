@@ -233,7 +233,7 @@
       <span class="who">— Airflow security model docs. Mitigation: code review.</span>
     </blockquote>
     <p class="body">That model assumes a human wrote and reviewed every task. With the <b style="color:var(--ink)">common.ai</b> provider, agents now <em>generate</em> task code at runtime — and <code>code_mode</code>’s <code>run_code</code> executes it <b style="color:var(--red)">in-process on the worker, with the worker’s credentials</b>. Untrusted by construction; reviewed by no one.</p>
-    <p class="body" style="margin-top:1.6vh">And agents read the outside world — documents, APIs, web pages. An LLM can’t tell instructions from data, so <em>anything the agent reads can steer the code it writes</em> (prompt injection). A sandbox shrinks that blast radius to one disposable, credential-free VM.</p>
+    <p class="body" style="margin-top:1.6vh">Agents also read the outside world — and an LLM can’t tell instructions from data: <em>anything it reads can steer the code it writes</em> (prompt injection). A sandbox shrinks the blast radius to one disposable, credential-free VM.</p>
   </div>
   <p class="footline">airflow.apache.org/docs/…/security/security_model.html</p>
 </section>
@@ -263,11 +263,11 @@
     <div class="cols c2">
       <div>
         <span class="tag hot">fast &amp; shared</span>
-        <p class="body">Celery-style workers start tasks instantly — into a process that shares everything with every other task on the node: one filesystem, one network identity, one pip environment (your <code>torch</code> pin fights their <code>pandas</code> pin).</p>
+        <p class="body">Celery-style workers start tasks instantly — into a process sharing everything on the node: one filesystem, one network identity, one pip env (your <code>torch</code> pin fights their <code>pandas</code> pin).</p>
       </div>
       <div>
         <span class="tag go">isolated &amp; slow</span>
-        <p class="body">Pod-per-task and Fargate give a real wall — and charge seconds-to-minutes of cold start for <em>every single try</em>. The trap bills you twice: warm fleets idle between bursts, cold starts tax every retry.</p>
+        <p class="body">Pod-per-task and Fargate give a real wall — and charge seconds-to-minutes of cold start on <em>every try</em>. Billed twice: warm fleets idle between bursts; cold starts tax retries.</p>
       </div>
     </div>
     <p class="big" style="margin-top:6vh">No Airflow executor targets <em>ephemeral cloud sandboxes</em>.<br><span style="color:var(--ink-3);font-size:.7em">That’s the gap issue #68845 names.</span></p>
@@ -297,7 +297,7 @@
       <li><b>Modal:</b> <code>import torch</code> — ~5 s cold → <b class="num">~1.05 s</b> from a memory snapshot.</li>
       <li><b>Cognition (Devin):</b> 20 GB machine snapshot — ~30 min → <b class="num">~200 ms</b> with blockdiff.</li>
       <li><b>Morph:</b> fork a <em>running</em> VM — processes, memory, in-flight state — in <b class="num">&lt; 250 ms</b>.</li>
-      <li><b>AWS Lambda MicroVMs</b> — launched two weeks ago (Jun 22): isolated, stateful Firecracker sandboxes, “near-instant launch and resume,” built to “safely run code that the application developer did not write.” One task, one VM is now an AWS-managed primitive.</li>
+      <li><b>AWS Lambda MicroVMs</b> (Jun 22): Firecracker sandboxes built to “safely run code that the application developer did not write” — near-instant launch/resume. One task, one VM is now an AWS primitive.</li>
       <li><b>Copy-on-write economics:</b> N forks ≈ 1 parent’s memory + deltas. One-sandbox-per-task becomes affordable.</li>
     </ul>
   </div>
@@ -309,6 +309,7 @@
   <p class="kicker">06 · The proposal — PR #68847</p>
   <h2>One ephemeral sandbox <em>per task try</em></h2>
   <div class="grow">
+    <p class="body" style="margin-bottom:2.5vh;font-family:var(--serif);font-size:clamp(17px,1.6vw,25px);color:var(--ink);max-width:none">A sandbox is a tiny, throwaway computer: created for one task try, deleted when it ends.</p>
     <div class="flow">
       <div class="node b"><h4>Scheduler</h4><p>Queues task tries exactly as today. No core changes — rides AIP-51’s public executor interface.</p></div>
       <div class="arrow">→</div>
