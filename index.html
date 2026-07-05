@@ -254,11 +254,11 @@
     <div class="cols c2">
       <div>
         <span class="tag hot">fast &amp; shared</span>
-        <p class="body">Celery-style workers start tasks instantly — into a process that shares everything with every other task on the node.</p>
+        <p class="body">Celery-style workers start tasks instantly — into a process that shares everything with every other task on the node: one filesystem, one network identity, one pip environment (your <code>torch</code> pin fights their <code>pandas</code> pin).</p>
       </div>
       <div>
         <span class="tag go">isolated &amp; slow</span>
-        <p class="body">Pod-per-task and Fargate give a real wall — and charge seconds-to-minutes of cold start for <em>every single try</em>.</p>
+        <p class="body">Pod-per-task and Fargate give a real wall — and charge seconds-to-minutes of cold start for <em>every single try</em>. The trap bills you twice: warm fleets idle between bursts, cold starts tax every retry.</p>
       </div>
     </div>
     <p class="big" style="margin-top:6vh">No Airflow executor targets <em>ephemeral cloud sandboxes</em>.<br><span style="color:var(--ink-3);font-size:.7em">That’s the gap issue #68845 names.</span></p>
@@ -372,7 +372,7 @@ executor = SandboxExecutor
 provider = e2b
 poll_interval = 5
 creation_batch_size = 8</pre>
-      <p class="body" style="margin-top:1.6em;font-size:.9em"><code>@task.sandbox</code> mirrors <code>@task.bash</code>: the callable returns the shell command that runs <em>inside</em> the ephemeral sandbox. Requires remote logging — logs ship from the sandbox, not the worker.</p>
+      <p class="body" style="margin-top:1.6em;font-size:.9em"><code>@task.sandbox</code> mirrors <code>@task.bash</code>: the callable returns the shell command that runs <em>inside</em> the ephemeral sandbox. Requires remote logging — logs ship from the sandbox before it dies, so every try leaves a complete, immutable execution record.</p>
       <p class="body" style="margin-top:1em;font-size:.82em;color:var(--ink-3)">Status: draft PR under community discussion · standalone executor: github.com/zozo123/airflow-provider-sandbox</p>
     </div>
   </div>
