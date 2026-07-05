@@ -287,11 +287,11 @@
       <li><b>Modal:</b> <code>import torch</code> — ~5 s cold → <b class="num">~1.05 s</b> from a memory snapshot.</li>
       <li><b>Cognition (Devin):</b> 20 GB machine snapshot — ~30 min → <b class="num">~200 ms</b> with blockdiff.</li>
       <li><b>Morph:</b> fork a <em>running</em> VM — processes, memory, in-flight state — in <b class="num">&lt; 250 ms</b>.</li>
-      <li><b>AWS Bedrock AgentCore:</b> every session gets a dedicated Firecracker microVM — never reused, memory sanitized on exit. “One task, one VM” is now an AWS-managed primitive.</li>
+      <li><b>AWS Lambda MicroVMs</b> — launched two weeks ago (Jun 22): isolated, stateful Firecracker sandboxes, “near-instant launch and resume,” built to “safely run code that the application developer did not write.” One task, one VM is now an AWS-managed primitive.</li>
       <li><b>Copy-on-write economics:</b> N forks ≈ 1 parent’s memory + deltas. One-sandbox-per-task becomes affordable.</li>
     </ul>
   </div>
-  <p class="footline">modal.com/blog/mem-snapshots · cognition.ai blockdiff · morph.so/blog/infinibranch · aws.amazon.com/bedrock/agentcore</p>
+  <p class="footline">modal.com/blog/mem-snapshots · cognition.ai blockdiff · morph.so/blog/infinibranch · aws.amazon.com/lambda/lambda-microvms</p>
 </section>
 
 <!-- ─────────────────────────── 7 · THE PROPOSAL ─────────────────────────── -->
@@ -335,7 +335,7 @@
     <p class="kicker" style="margin:2.6vh 0 1vh">Same shape across the ecosystem — any backend can plug in</p>
     <div class="backends" style="margin-top:0">
       <div class="be">Tensorlake<small>“sandbox-native cloud for agents” · fork/suspend microVMs</small></div>
-      <div class="be">AWS Bedrock AgentCore<small>one microVM per session · sanitized on exit</small></div>
+      <div class="be">AWS Lambda MicroVMs<small>Firecracker · “near-instant launch/resume” · new Jun 2026</small></div>
       <div class="be">crabbox.sh<small>OSS contract · lease → sync → run → release · 50+ backends</small></div>
     </div>
   </div>
