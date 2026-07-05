@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Sandbox provider for ephemeral task isolation — Airflow Town Hall, July 2026</title>
+<meta name="description" content="One ephemeral microVM per Airflow task try — slides from the Apache Airflow Monthly Virtual Town Hall, July 10, 2026. PR apache/airflow#68847.">
+<meta property="og:title" content="New Sandbox provider for ephemeral task isolation">
+<meta property="og:description" content="One ephemeral microVM per Airflow task try — Apache Airflow Town Hall, July 10, 2026. Navigate with arrow keys.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1016'/%3E%3Ccircle cx='10' cy='10' r='4' fill='%232E90EF'/%3E%3Ccircle cx='22' cy='10' r='4' fill='%230099A8'/%3E%3Ccircle cx='10' cy='22' r='4' fill='%2321B056'/%3E%3Ccircle cx='22' cy='22' r='4' fill='%23E8502F'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b1016;
+    --bg-raise:#111823;
+    --ink:#e8edf2;
+    --ink-2:#9fb0bf;
+    --ink-3:#7a8a99;
+    --line:#22303e;
+    --blue:#2E90EF;
+    --teal:#0099A8;
+    --green:#21B056;
+    --red:#E8502F;
+    --serif:"Instrument Serif", Georgia, "Times New Roman", serif;
+    --mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line)}
+  a:hover{border-bottom-color:var(--teal)}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:clamp(12px, 1.15vw, 18px);
+    line-height:1.55;
+    overflow:hidden;
+  }
+  /* faint blueprint grid */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:88px 88px;
+    opacity:.14;
+  }
+  .slide{
+    position:absolute;inset:0;z-index:1;
+    display:none;
+    flex-direction:column;
+    padding:7vh 7vw 11vh;
+    animation:none;
+  }
+  .slide.active{display:flex;animation:enter .45s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes enter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  .kicker{
+    font-size:.72em;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-3);margin-bottom:2.2vh;
+  }
+  .kicker b{color:var(--teal);font-weight:500}
+  h1,h2{font-family:var(--serif);font-weight:400;letter-spacing:.005em}
+  h1{font-size:clamp(40px, 5.6vw, 92px);line-height:1.04}
+  h2{font-size:clamp(30px, 3.6vw, 58px);line-height:1.1;margin-bottom:3.5vh}
+  em{font-style:italic}
+  h1 em, h2 em{color:var(--blue)}
+  .body{max-width:62ch;color:var(--ink-2)}
+  .grow{flex:1;display:flex;flex-direction:column;justify-content:center}
+
+  /* chrome */
+  #bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--teal),var(--green));z-index:9;transition:width .3s ease}
+  #hud{
+    position:fixed;left:7vw;right:7vw;bottom:3.6vh;z-index:9;
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:.7em;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+  }
+  .dots{display:inline-flex;gap:6px;margin-left:14px;vertical-align:middle}
+  .pin{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .pin.b{background:var(--blue)}.pin.t{background:var(--teal)}.pin.g{background:var(--green)}.pin.r{background:var(--red)}
+
+  /* generic pieces */
+  .rule{border:0;border-top:1px solid var(--line);margin:3vh 0}
+  .cols{display:grid;gap:3.2vw}
+  .c2{grid-template-columns:1fr 1fr}
+  .tag{
+    display:inline-block;font-size:.7em;letter-spacing:.16em;text-transform:uppercase;
+    border:1px solid var(--line);border-radius:999px;padding:.35em 1em;color:var(--ink-2);
+    margin-right:.6em;margin-bottom:.8em;background:var(--bg-raise)
+  }
+  .tag.hot{border-color:var(--red);color:var(--red)}
+  .tag.go{border-color:var(--green);color:var(--green)}
+  .tag.blu{border-color:var(--blue);color:var(--blue)}
+
+  blockquote{
+    font-family:var(--serif);font-size:clamp(20px,2vw,32px);line-height:1.35;
+    border-left:2px solid var(--red);padding-left:1.4em;margin:2.2vh 0;max-width:34em;
+  }
+  blockquote.calm{border-left-color:var(--teal)}
+  blockquote .who{display:block;font-family:var(--mono);font-size:.5em;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:1em}
+
+  table{border-collapse:collapse;width:100%;font-size:.92em}
+  th{font-size:.72em;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);font-weight:500;text-align:left;padding:.7em .9em;border-bottom:1px solid var(--line)}
+  td{padding:.68em .9em;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
+  td:first-child{color:var(--ink);white-space:nowrap}
+  td .lvl{font-size:.78em;letter-spacing:.08em}
+  .lvl.none{color:var(--red)} .lvl.soft{color:#d9a12e} .lvl.hard{color:var(--green)}
+
+  code,pre{font-family:var(--mono)}
+  pre{
+    background:var(--bg-raise);border:1px solid var(--line);border-radius:10px;
+    padding:1.4em 1.6em;font-size:clamp(11px,1vw,16px);line-height:1.6;overflow:auto
+  }
+  .k{color:var(--blue)} .s{color:var(--green)} .f{color:var(--teal)} .cm{color:var(--ink-3);font-style:italic} .d{color:var(--red)}
+
+  .big{
+    font-family:var(--serif);font-size:clamp(26px,2.6vw,42px);line-height:1.25;max-width:30em
+  }
+  .num{color:var(--green)}
+  .steps{list-style:none;counter-reset:s}
+  .steps li{
+    counter-increment:s;display:flex;gap:1.2em;padding:.9em 0;border-bottom:1px solid var(--line);
+    color:var(--ink-2);align-items:baseline
+  }
+  .steps li::before{
+    content:"0" counter(s);font-size:.75em;color:var(--teal);letter-spacing:.1em;min-width:2.4em
+  }
+  .steps li b{color:var(--ink);font-weight:500}
+  ul.plain{list-style:none}
+  ul.plain li{padding:.42em 0 .42em 1.6em;position:relative;color:var(--ink-2)}
+  ul.plain li::before{content:"—";position:absolute;left:0;color:var(--teal)}
+  ul.plain li b{color:var(--ink);font-weight:500}
+
+  /* latency dot plot */
+  .plot{margin-top:2vh}
+  .prow{display:grid;grid-template-columns:15em 1fr;align-items:center;height:3.4em}
+  .plab{font-size:.85em;color:var(--ink-2);padding-right:1.2em;text-align:right}
+  .plab b{color:var(--ink);font-weight:500;display:block}
+  .plab small{color:var(--ink-3);font-size:.82em}
+  .ptrack{position:relative;height:100%;border-left:1px solid var(--line)}
+  .grid-l{position:absolute;top:0;bottom:0;width:1px;background:var(--line);opacity:.75}
+  .grid-cap{position:absolute;top:calc(100% + .5em);transform:translateX(-50%);font-size:.68em;letter-spacing:.1em;color:var(--ink-3)}
+  .dot{
+    position:absolute;top:50%;width:13px;height:13px;border-radius:50%;
+    transform:translate(-50%,-50%);background:var(--blue);
+    box-shadow:0 0 0 2px var(--bg);
+  }
+  .hair{position:absolute;left:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,currentColor);opacity:.35}
+  .dval{
+    position:absolute;top:50%;transform:translateY(-50%);
+    font-size:.8em;color:var(--ink);white-space:nowrap
+  }
+  .dval small{color:var(--ink-3);display:block;font-size:.85em;line-height:1.2}
+  .hero-note{
+    margin-top:5.5vh;font-family:var(--serif);font-size:clamp(20px,2vw,32px);color:var(--ink);
+  }
+  .hero-note .num{font-style:italic}
+
+  /* architecture flow */
+  .flow{display:flex;align-items:stretch;gap:0;margin:2vh 0}
+  .node{
+    border:1px solid var(--line);border-radius:12px;background:var(--bg-raise);
+    padding:1.1em 1.3em;flex:1;min-width:0
+  }
+  .node h4{font-size:.75em;letter-spacing:.14em;text-transform:uppercase;font-weight:500;margin-bottom:.5em}
+  .node p{font-size:.8em;color:var(--ink-2);line-height:1.5}
+  .node.b h4{color:var(--blue)} .node.t h4{color:var(--teal)} .node.g h4{color:var(--green)} .node.r h4{color:var(--red)}
+  .arrow{align-self:center;padding:0 .8em;color:var(--ink-3);font-size:1.1em}
+  .footline{margin-top:auto;padding-top:2.5vh;font-size:.78em;color:var(--ink-3)}
+  .footline a{color:var(--teal);text-decoration:none}
+
+  .qgrid{display:grid;grid-template-columns:1fr 1fr;gap:2vw 3vw;align-content:center}
+  .qcard{border:1px solid var(--line);border-radius:12px;padding:1.6em 1.8em;background:var(--bg-raise)}
+  .qcard p{font-family:var(--serif);font-size:clamp(15px,1.45vw,23px);line-height:1.35}
+  .qcard .who{font-size:.68em;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:1.1em}
+
+  .backends{display:flex;gap:.8em;flex-wrap:wrap;margin-top:1.6vh}
+  .be{
+    border:1px solid var(--line);border-radius:10px;padding:.7em 1.1em;background:var(--bg-raise);
+    font-size:.85em;color:var(--ink)
+  }
+  .be small{display:block;color:var(--ink-3);font-size:.8em}
+
+  @media (max-aspect-ratio: 4/3){
+    .c2{grid-template-columns:1fr}
+    .qgrid{grid-template-columns:1fr}
+    .flow{flex-direction:column}
+    .arrow{transform:rotate(90deg);padding:.4em 0;text-align:center}
+    .prow{grid-template-columns:8.5em 1fr}
+    .plab{font-size:.72em}
+    .plab small{display:none}
+    td:first-child{white-space:normal}
+    table{font-size:.78em}
+    th,td{padding:.5em .5em}
+    .grow{overflow-y:auto}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<!-- ─────────────────────────── 1 · TITLE ─────────────────────────── -->
+<section class="slide">
+  <div class="grow">
+    <p class="kicker">Apache Airflow · Monthly Virtual Town Hall · <b>July 10, 2026</b></p>
+    <h1>New Sandbox provider for<br><em>ephemeral task isolation</em></h1>
+    <hr class="rule" style="max-width:38ch">
+    <p class="body">One fresh microVM per task try. Destroyed when the task ends.<br>
+    <span style="color:var(--ink-3)">apache/airflow <a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener"><b style="color:var(--teal)">#68847</b></a> · issue <a href="https://github.com/apache/airflow/issues/68845" target="_blank" rel="noopener"><b style="color:var(--teal)">#68845</b></a> · <a href="https://lists.apache.org/list.html?dev@airflow.apache.org" target="_blank" rel="noopener">dev@airflow discussion</a></span></p>
+  </div>
+  <p class="footline">Yossi Eliaz — Incredibuild &nbsp;·&nbsp; <span class="dots"><span class="pin b"></span> <span class="pin t"></span> <span class="pin g"></span> <span class="pin r"></span></span></p>
+</section>
+
+<!-- ─────────────────────────── 2 · WHY NOW ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">01 · Why now</p>
+  <h2>Code <em>nobody wrote</em> is entering our DAGs</h2>
+  <div class="grow">
+    <blockquote>“Airflow lacks native sandboxing mechanisms… DAG authors can execute arbitrary code on workers.”
+      <span class="who">— Airflow security model docs. Mitigation: code review.</span>
+    </blockquote>
+    <p class="body">That model assumes a human wrote and reviewed every task. With the <b style="color:var(--ink)">common.ai</b> provider, agents now <em>generate</em> task code at runtime — and <code>code_mode</code>’s <code>run_code</code> executes it <b style="color:var(--red)">in-process on the worker, with the worker’s credentials</b>. Untrusted by construction; reviewed by no one.</p>
+  </div>
+  <p class="footline">airflow.apache.org/docs/…/security/security_model.html</p>
+</section>
+
+<!-- ─────────────────────────── 3 · WHERE WE STAND ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">02 · Where Airflow stands, mid-2026</p>
+  <h2>AIP-72 built a <em>credential</em> boundary — not a sandbox</h2>
+  <div class="grow">
+    <table>
+      <tr><th>Mechanism</th><th>Actual boundary</th><th>Isolation</th></tr>
+      <tr><td>Task SDK / AIP-72</td><td>Workers hold zero DB credentials; per-task JWT via Execution API. But task code = ordinary OS process.</td><td><span class="lvl soft">credential-only</span></td></tr>
+      <tr><td>Local / Celery</td><td>Shared long-lived worker: one filesystem, network identity, pip env for every task.</td><td><span class="lvl none">none</span></td></tr>
+      <tr><td>Multi-team / AIP-67</td><td>“Logical isolation… <i>not complete isolation</i>” — docs’ words, not mine.</td><td><span class="lvl soft">logical</span></td></tr>
+      <tr><td>KubernetesExecutor</td><td>Pod per task — a real boundary, paid for in image-pull + schedule + bootstrap.</td><td><span class="lvl hard">pod · slow</span></td></tr>
+      <tr><td>ECS / Fargate executor</td><td>Container per task (Fargate: microVM-backed). Cold start ≈ 2.5 minutes on Fargate. Per task.</td><td><span class="lvl hard">vm · slower</span></td></tr>
+    </table>
+  </div>
+  <p class="footline">Sources: Airflow security-model, multi-team &amp; executor docs; amazon-provider ECS executor docs</p>
+</section>
+
+<!-- ─────────────────────────── 4 · THE TRAP ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">03 · The trap</p>
+  <div class="grow">
+    <h2 style="margin-bottom:5vh">Today you choose:<br><em>fast-and-shared</em> or <em>isolated-and-slow</em></h2>
+    <div class="cols c2">
+      <div>
+        <span class="tag hot">fast &amp; shared</span>
+        <p class="body">Celery-style workers start tasks instantly — into a process that shares everything with every other task on the node.</p>
+      </div>
+      <div>
+        <span class="tag go">isolated &amp; slow</span>
+        <p class="body">Pod-per-task and Fargate give a real wall — and charge seconds-to-minutes of cold start for <em>every single try</em>.</p>
+      </div>
+    </div>
+    <p class="big" style="margin-top:6vh">No Airflow executor targets <em>ephemeral cloud sandboxes</em>.<br><span style="color:var(--ink-3);font-size:.7em">That’s the gap issue #68845 names.</span></p>
+  </div>
+</section>
+
+<!-- ─────────────────────────── 5 · THE CHART ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">04 · What the agent platforms figured out</p>
+  <h2>Per-task cold start, on a <em>log</em> scale</h2>
+  <div class="grow">
+    <div class="plot" id="latencyplot">
+      <!-- rows injected by JS so dot positions are computed, not hand-placed -->
+    </div>
+    <p class="hero-note">≈ <span class="num">4 orders of magnitude</span> faster — at a <em>stronger</em> isolation boundary.</p>
+  </div>
+  <p class="footline">Firecracker: AWS / NSDI ’20 (~125 ms boot, &lt;5 MiB overhead, 150 VMs/s/host) · E2B docs · Firecracker snapshot docs · Airflow amazon-provider docs</p>
+</section>
+
+<!-- ─────────────────────────── 6 · SNAPSHOTS & FORKS ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">05 · The mechanism</p>
+  <h2>Snapshots replaced warm pools.<br><em>Forks</em> replaced setup.</h2>
+  <div class="grow">
+    <ul class="plain" style="max-width:64ch">
+      <li><b>Pay for warm state once, reuse it N times.</b> A “golden” parent runs <code>pip install</code>, imports, cache warmup — every task try forks from it, already hot.</li>
+      <li><b>Modal:</b> <code>import torch</code> — ~5 s cold → <b class="num">~1.05 s</b> from a memory snapshot.</li>
+      <li><b>Cognition (Devin):</b> 20 GB machine snapshot — ~30 min → <b class="num">~200 ms</b> with blockdiff.</li>
+      <li><b>Morph:</b> fork a <em>running</em> VM — processes, memory, in-flight state — in <b class="num">&lt; 250 ms</b>.</li>
+      <li><b>Copy-on-write economics:</b> N forks ≈ 1 parent’s memory + deltas. One-sandbox-per-task becomes affordable.</li>
+    </ul>
+  </div>
+  <p class="footline">modal.com/blog/mem-snapshots · cognition.ai blockdiff · morph.so/blog/infinibranch</p>
+</section>
+
+<!-- ─────────────────────────── 7 · THE PROPOSAL ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">06 · The proposal — PR #68847</p>
+  <h2>One ephemeral sandbox <em>per task try</em></h2>
+  <div class="grow">
+    <div class="flow">
+      <div class="node b"><h4>Scheduler</h4><p>Queues task tries exactly as today. No core changes — rides AIP-51’s public executor interface.</p></div>
+      <div class="arrow">→</div>
+      <div class="node t"><h4>SandboxExecutor</h4><p>Creates a sandbox per try, uploads the workload, then only reconciles <em>exit state</em> via a polling watcher.</p></div>
+      <div class="arrow">→</div>
+      <div class="node g"><h4>MicroVM sandbox</h4><p>Task SDK supervisor runs <em>inside</em>: heartbeats + logs go straight to the api-server — EdgeExecutor topology, not a DB-coupled watcher.</p></div>
+      <div class="arrow">→</div>
+      <div class="node r"><h4>Destroy</h4><p>Task ends, sandbox dies. Nothing to clean, nothing to leak into the next try.</p></div>
+    </div>
+    <p class="body" style="margin-top:2vh">Plus <b style="color:var(--ink)">SandboxOperator</b> and <b style="color:var(--ink)">@task.sandbox</b> for per-task opt-in — mix executors per deployment (AIP-61) and route only untrusted or heavy tasks to sandboxes.</p>
+  </div>
+  <p class="footline"><a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener">github.com/apache/airflow/pull/68847</a> · +3,216 lines · 54 files · docs, tests, example DAG</p>
+</section>
+
+<!-- ─────────────────────────── 8 · BACKENDS ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">07 · Pluggable backends</p>
+  <h2>One contract, <em>any</em> sandbox vendor</h2>
+  <div class="grow">
+    <pre>SandboxProvider          <span class="cm"># abstract base — backends/base.py</span>
+  authenticate() → create_sandbox(<span class="f">spec</span>) → upload_workload()
+  → run() → poll_status() → fetch_logs() → destroy()
+
+<span class="f">SandboxSpec</span>(image, cpu, memory_mb, disk_gb, timeout, env, …)
+<span class="f">SandboxState</span>: PENDING · RUNNING · SUCCEEDED · FAILED · GONE · <span class="d">UNKNOWN</span>
+<span class="cm"># UNKNOWN ≠ GONE — transient API blips never kill a healthy task</span></pre>
+    <div class="backends">
+      <div class="be">local<small>subprocess · no creds · dev</small></div>
+      <div class="be">Daytona<small>container · sub-90 ms (vendor, best case)</small></div>
+      <div class="be">E2B<small>Firecracker · ~150 ms create</small></div>
+      <div class="be">Modal<small>gVisor · memory snapshots</small></div>
+      <div class="be">islo<small>microVM · pause/resume</small></div>
+    </div>
+  </div>
+  <p class="footline">Config: <code>[sandbox] provider = local|daytona|e2b|modal|islo</code> — or any <code>module:Class</code> path</p>
+</section>
+
+<!-- ─────────────────────────── 9 · CODE ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">08 · What it looks like</p>
+  <h2>Same DAG, <em>different blast radius</em></h2>
+  <div class="grow cols c2" style="align-items:center">
+    <pre><span class="k">from</span> airflow.sdk <span class="k">import</span> dag, task
+
+<span class="f">@dag</span>
+<span class="k">def</span> <span class="f">nightly_train</span>():
+
+    <span class="f">@task.sandbox</span>(
+        image=<span class="s">"python:3.12-slim"</span>,
+        cpu=<span class="num">2</span>, memory_mb=<span class="num">2048</span>,
+    )
+    <span class="k">def</span> <span class="f">train</span>():
+        <span class="cm"># returns the command the sandbox runs</span>
+        <span class="k">return</span> <span class="s">"python train.py --epochs 3"</span>
+
+    train()</pre>
+    <div>
+      <pre><span class="cm"># airflow.cfg</span>
+[core]
+executor = SandboxExecutor
+
+[sandbox]
+provider = e2b
+poll_interval = 5
+creation_batch_size = 8</pre>
+      <p class="body" style="margin-top:1.6em;font-size:.9em"><code>@task.sandbox</code> mirrors <code>@task.bash</code>: the callable returns the shell command that runs <em>inside</em> the ephemeral sandbox. Requires remote logging — logs ship from the sandbox, not the worker.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── 10 · THE PIVOT ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">09 · What the community said — and the pivot</p>
+  <h2>Feedback received. <em>Direction changed.</em></h2>
+  <div class="grow qgrid">
+    <div class="qcard"><p>“My first main concern… is how would this integrate with Common AI Provider and why should it be separate provider instead of part of <i>common.ai</i>.”</p><div class="who">Kaxil Naik · converted PR to draft pending dev-list discussion</div></div>
+    <div class="qcard"><p>“It likely requires an AIP… your current PR and implementation will be treated as one potential solution — and mostly a starting point.”</p><div class="who">Jarek Potiuk · plus: threat model required</div></div>
+    <div class="qcard"><p>“+1 to Kaxil’s comments… we discussed this offline earlier in the context of agentic workflows… interaction with the common.ai provider would be the logical first step.”</p><div class="who">Vikram Koka</div></div>
+    <div class="qcard" style="border-color:var(--green)"><p>So: the work pivots into <b>common.ai</b> as a <b>SandboxToolset</b> — a first-class toolset like SQLToolset / MCPToolset. Agent <code>run_code</code> executes <em>off the worker</em>, closing the <code>code_mode</code> credential gap.</p><div class="who" style="color:var(--green)">The pivot · standalone executor lives on as a third-party package</div></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── 11 · HONEST LIMITS ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">10 · Honest limits — and what you can do today</p>
+  <h2>What a sandbox <em>doesn’t</em> fix</h2>
+  <div class="grow cols c2">
+    <div>
+      <span class="tag hot">still open</span>
+      <ul class="plain">
+        <li>DAG processor &amp; Triggerer still hold DB credentials</li>
+        <li>No per-task least-privilege secrets scoping yet — JWT identity enables it; ACLs are future work</li>
+        <li>Snapshot sharp edges: TCP connections die, cloned entropy needs VMGenID, GPU state largely unsnapshottable</li>
+      </ul>
+    </div>
+    <div>
+      <span class="tag go">today, zero airflow changes</span>
+      <ul class="plain">
+        <li>gVisor / Kata via <code>runtimeClassName</code> in a KubernetesExecutor <code>pod_override</code></li>
+        <li>gVisor: no KVM needed, ~5–20% syscall overhead — GKE Sandbox is the managed flavor</li>
+        <li>Route only sensitive tasks there with multiple executors (AIP-61)</li>
+      </ul>
+    </div>
+  </div>
+  <p class="footline">This is proposal-stage engineering — the caveats are part of the design discussion, not footnotes.</p>
+</section>
+
+<!-- ─────────────────────────── 12 · ROADMAP / ASK ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">11 · Where this goes — with your help</p>
+  <h2>The community owns the <em>outcome</em></h2>
+  <div class="grow cols c2" style="align-items:center">
+    <ol class="steps">
+      <li><b>Dev-list discussion</b>&nbsp;— thread open on dev@airflow since June 24</li>
+      <li><b>AIP</b>&nbsp;— scope, use cases, threat model &amp; security properties</li>
+      <li><b>Focused common.ai PR</b>&nbsp;— SandboxToolset, reviewed on its own</li>
+      <li><b>Dev-call demo</b>&nbsp;— live @task.sandbox run, warts and all</li>
+    </ol>
+    <div>
+      <p class="big">Read <a href="https://github.com/apache/airflow/issues/68845" target="_blank" rel="noopener" style="color:var(--teal)">#68845</a> &amp; <a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener" style="color:var(--teal)">#68847</a>.<br>Tell us your use case:<br><em>untrusted code? multi-tenant? agent tasks?</em></p>
+      <p class="body" style="margin-top:2.5vh;font-size:.9em">Long-term maintainers committed (Yossi Eliaz, Yuval Raz — Incredibuild). Thanks to Elad Kalif (eladkal) for offering to sponsor, and to Kaxil, Jarek &amp; Vikram for the early steering.</p>
+    </div>
+  </div>
+  <p class="footline" style="font-family:var(--serif);font-size:clamp(17px,1.7vw,26px);color:var(--ink)">Make Airflow safe for code nobody wrote. <span style="color:var(--ink-3);font-family:var(--mono);font-size:.55em;letter-spacing:.14em">&nbsp;· THANK YOU — QUESTIONS IN #TOWNHALL-SPEAKERS</span></p>
+</section>
+
+<div id="hud">
+  <span>Sandbox provider · Airflow Town Hall · Jul 2026</span>
+  <span id="counter"></span>
+</div>
+
+<script>
+/* ---- latency dot plot (log scale, positions computed) ---- */
+const ROWS = [
+  {name:"Fargate cold start",  sub:"per task · amazon-provider docs", ms:150000, show:"~2.5 min",  color:"var(--blue)"},
+  {name:"K8s pod per task",    sub:"schedule + pull + bootstrap",     ms:5000,   show:"secs–mins", color:"var(--blue)"},
+  {name:"E2B sandbox create",  sub:"prewarmed Firecracker snapshot",  ms:150,    show:"~150 ms",   color:"var(--blue)"},
+  {name:"Firecracker cold boot",sub:"minimal guest · AWS",            ms:125,    show:"~125 ms",   color:"var(--blue)"},
+  {name:"Snapshot restore",    sub:"page-cache-warm · FC docs",       ms:30,     show:"5–30 ms",   color:"var(--green)", hot:true},
+];
+const LO = Math.log10(3), HI = Math.log10(300000);
+const pct = ms => ((Math.log10(ms)-LO)/(HI-LO))*100;
+const plot = document.getElementById("latencyplot");
+const grid = [[10,"10 ms"],[100,"100 ms"],[1000,"1 s"],[10000,"10 s"],[100000,"100 s"]];
+ROWS.forEach((r,i)=>{
+  const row = document.createElement("div"); row.className="prow";
+  const x = pct(r.ms);
+  row.innerHTML =
+    `<div class="plab"><b>${r.name}</b><small>${r.sub}</small></div>
+     <div class="ptrack">
+       ${i===ROWS.length-1 ? grid.map(([v,l])=>`<div class="grid-l" style="left:${pct(v)}%"></div><div class="grid-cap" style="left:${pct(v)}%">${l}</div>`).join("") : grid.map(([v])=>`<div class="grid-l" style="left:${pct(v)}%"></div>`).join("")}
+       <div class="hair" style="width:${x}%;color:${r.color}"></div>
+       <div class="dot" style="left:${x}%;color:${r.color};background:${r.color};${r.hot?"width:16px;height:16px":""}"></div>
+       <div class="dval" style="${x>80?`right:${100-x}%;margin-right:1.4em;text-align:right`:`left:${x}%;margin-left:1.1em`}">${r.show}${r.hot?"<small>← the proposal targets this</small>":""}</div>
+     </div>`;
+  plot.appendChild(row);
+});
+
+/* ---- deck navigation ---- */
+const slides=[...document.querySelectorAll(".slide")];
+let cur=Math.min(Math.max((parseInt(location.hash.slice(1))||1)-1,0),slides.length-1);
+function show(n){
+  cur=Math.min(Math.max(n,0),slides.length-1);
+  slides.forEach((s,i)=>s.classList.toggle("active",i===cur));
+  document.getElementById("counter").textContent=String(cur+1).padStart(2,"0")+" / "+slides.length;
+  document.getElementById("bar").style.width=((cur+1)/slides.length*100)+"%";
+  const h="#"+(cur+1);
+  if(location.hash!==h)history.replaceState(null,"",h);
+}
+addEventListener("keydown",e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  if(["ArrowRight","ArrowDown","PageDown"," "].includes(e.key)){e.preventDefault();show(cur+1)}
+  else if(["ArrowLeft","ArrowUp","PageUp"].includes(e.key)){e.preventDefault();show(cur-1)}
+  else if(e.key==="Home")show(0);
+  else if(e.key==="End")show(slides.length-1);
+  else if(e.key==="f")document.documentElement.requestFullscreen?.();
+});
+addEventListener("click",e=>{
+  if(e.target.closest("a")||e.target.closest("pre"))return;
+  if(getSelection().toString())return;
+  show(e.clientX>innerWidth/2?cur+1:cur-1);
+});
+addEventListener("hashchange",()=>{
+  const n=Math.max((parseInt(location.hash.slice(1))||1)-1,0);
+  if(n!==cur)show(n);
+});
+let tx=null;
+addEventListener("touchstart",e=>{tx=e.touches[0].clientX},{passive:true});
+addEventListener("touchend",e=>{
+  if(tx===null)return;
+  const dx=e.changedTouches[0].clientX-tx;tx=null;
+  if(Math.abs(dx)>50)show(dx<0?cur+1:cur-1);
+},{passive:true});
+show(cur);
+</script>
+</body>
+</html>
