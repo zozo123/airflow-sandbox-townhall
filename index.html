@@ -275,9 +275,27 @@
   </div>
 </section>
 
-<!-- ─────────────────────────── 5 · THE CHART ─────────────────────────── -->
+<!-- ─────────────────────────── 5 · THE BIGGER PICTURE ─────────────────────────── -->
 <section class="slide">
-  <p class="kicker">04 · What the agent platforms figured out</p>
+  <p class="kicker">04 · The bigger picture</p>
+  <h2>The unit of isolation shrank <em>to the task</em></h2>
+  <div class="grow">
+    <div class="flow">
+      <div class="node b"><h4>VM</h4><p>A whole machine. Strong wall — but heavy, slow to boot.</p></div>
+      <div class="arrow">→</div>
+      <div class="node t"><h4>Container</h4><p>A service. Fast and dense — but shares one kernel.</p></div>
+      <div class="arrow">→</div>
+      <div class="node g"><h4>Sandbox</h4><p>One task try. Fast <em>and</em> isolated — then gone.</p></div>
+    </div>
+    <p class="big" style="margin-top:5.5vh">Stop <em>provisioning</em> compute — <em style="color:var(--green)">instantiate</em> it: one machine per task, then throw it away.</p>
+    <p class="body" style="margin-top:2.2vh;font-size:1.05em;color:var(--ink);max-width:none">Airflow already thinks in tasks. The runtime finally matches the DAG.</p>
+  </div>
+  <p class="footline">The whole shift in one line: “the efficiency of multitenancy with the security of single tenancy.” — Modal</p>
+</section>
+
+<!-- ─────────────────────────── 6 · THE CHART ─────────────────────────── -->
+<section class="slide">
+  <p class="kicker">05 · What the agent platforms figured out</p>
   <h2>Per-task cold start, on a <em>log</em> scale</h2>
   <div class="grow">
     <div class="plot" id="latencyplot">
@@ -290,7 +308,7 @@
 
 <!-- ─────────────────────────── 6 · SNAPSHOTS & FORKS ─────────────────────────── -->
 <section class="slide">
-  <p class="kicker">05 · The mechanism</p>
+  <p class="kicker">06 · The mechanism</p>
   <h2>Snapshots replaced warm pools.<br><em>Forks</em> replaced setup.</h2>
   <div class="grow">
     <ul class="plain" style="max-width:64ch">
@@ -307,7 +325,7 @@
 
 <!-- ─────────────────────────── 7 · THE PROPOSAL ─────────────────────────── -->
 <section class="slide">
-  <p class="kicker">06 · The proposal — PR #68847</p>
+  <p class="kicker">07 · The proposal — PR #68847</p>
   <h2>One ephemeral sandbox <em>per task try</em></h2>
   <div class="grow">
     <div class="flow">
@@ -326,7 +344,7 @@
 
 <!-- ─────────────────────────── 8 · BACKENDS ─────────────────────────── -->
 <section class="slide">
-  <p class="kicker">07 · Pluggable backends</p>
+  <p class="kicker">08 · Pluggable backends</p>
   <h2>One contract, <em>any</em> sandbox vendor</h2>
   <div class="grow">
     <pre>SandboxProvider          <span class="cm"># abstract base — backends/base.py</span>
@@ -355,7 +373,7 @@
 
 <!-- ─────────────────────────── 9 · CODE ─────────────────────────── -->
 <section class="slide">
-  <p class="kicker">08 · What it looks like</p>
+  <p class="kicker">09 · What it looks like</p>
   <h2>Same DAG, <em>different blast radius</em></h2>
   <div class="grow cols c2" style="align-items:center">
     <pre><span class="k">from</span> airflow.sdk <span class="k">import</span> dag, task
@@ -390,7 +408,7 @@ creation_batch_size = 8</pre>
 
 <!-- ─────────────────────────── 10 · THE PIVOT ─────────────────────────── -->
 <section class="slide">
-  <p class="kicker">09 · What the community said — and the pivot</p>
+  <p class="kicker">10 · What the community said — and the pivot</p>
   <h2>Feedback received. <em>Direction changed.</em></h2>
   <div class="grow qgrid">
     <div class="qcard"><p>“My first main concern… is how would this integrate with Common AI Provider and why should it be separate provider instead of part of <i>common.ai</i>.”</p><div class="who">Kaxil Naik · converted PR to draft pending dev-list discussion</div></div>
@@ -402,7 +420,7 @@ creation_batch_size = 8</pre>
 
 <!-- ─────────────────────────── 11 · HONEST LIMITS ─────────────────────────── -->
 <section class="slide">
-  <p class="kicker">10 · Honest limits — and what you can do today</p>
+  <p class="kicker">11 · Honest limits — and what you can do today</p>
   <h2>What a sandbox <em>doesn’t</em> fix</h2>
   <div class="grow cols c2">
     <div>
@@ -427,7 +445,7 @@ creation_batch_size = 8</pre>
 
 <!-- ─────────────────────────── 12 · ROADMAP / ASK ─────────────────────────── -->
 <section class="slide">
-  <p class="kicker">11 · Where this goes — with your help</p>
+  <p class="kicker">12 · Where this goes — with your help</p>
   <h2>The community owns the <em>outcome</em></h2>
   <div class="grow cols c2" style="align-items:center">
     <ol class="steps">
