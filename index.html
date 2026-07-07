@@ -250,7 +250,7 @@
       <tr><td>Local / Celery</td><td>Shared long-lived worker: one filesystem, network identity, pip env for every task.</td><td><span class="lvl none">none</span></td></tr>
       <tr><td>Multi-team / AIP-67</td><td>“Logical isolation… <i>not complete isolation</i>” — docs’ words, not mine.</td><td><span class="lvl soft">logical</span></td></tr>
       <tr><td>KubernetesExecutor</td><td>Pod per task — a real boundary, paid for in image-pull + schedule + bootstrap.</td><td><span class="lvl hard">pod · slow</span></td></tr>
-      <tr><td>ECS / Fargate executor</td><td>Container per task (Fargate: microVM-backed). Cold start ≈ 2.5 minutes on Fargate. Per task.</td><td><span class="lvl hard">vm · slower</span></td></tr>
+      <tr><td>ECS / Fargate executor</td><td>Container per task, Fargate by default. ~50–60s startup latency per task (amazon-provider docs).</td><td><span class="lvl hard">container · slow</span></td></tr>
     </table>
   </div>
   <p class="footline">Sources: Airflow security-model, multi-team &amp; executor docs; amazon-provider ECS executor docs</p>
@@ -301,7 +301,7 @@
     <div class="plot" id="latencyplot">
       <!-- rows injected by JS so dot positions are computed, not hand-placed -->
     </div>
-    <p class="hero-note">≈ <span class="num">4 orders of magnitude</span> faster — at a <em>stronger</em> isolation boundary.</p>
+    <p class="hero-note">≈ <span class="num">3–4 orders of magnitude</span> faster — at a <em>stronger</em> isolation boundary.</p>
   </div>
   <p class="footline">Firecracker: AWS / NSDI ’20 (~125 ms boot, &lt;5 MiB overhead, 150 VMs/s/host) · E2B docs · Firecracker snapshot docs · Airflow amazon-provider docs</p>
 </section>
@@ -333,7 +333,7 @@
       <div class="arrow">→</div>
       <div class="node t"><h4>SandboxExecutor</h4><p>Creates a sandbox per try, uploads the workload, then only reconciles <em>exit state</em> via a polling watcher.</p></div>
       <div class="arrow">→</div>
-      <div class="node g"><h4>microVM sandbox</h4><p>The task reports its own heartbeats and logs straight back to Airflow (EdgeExecutor-style) — no extra plumbing on the worker.</p></div>
+      <div class="node g"><h4>microVM sandbox</h4><p>The task heartbeats its state to Airflow (EdgeExecutor-style) and ships logs to remote storage — no extra plumbing on the worker.</p></div>
       <div class="arrow">→</div>
       <div class="node r"><h4>Destroy</h4><p>Task ends, sandbox dies. Nothing to clean, nothing to leak into the next try.</p></div>
     </div>
@@ -401,7 +401,7 @@ provider = e2b
 poll_interval = 5
 creation_batch_size = 8</pre>
       <p class="body" style="margin-top:1.6em;font-size:.9em">The callable returns the shell command that runs <em>inside</em> the sandbox; logs ship out before it dies, so every try leaves a complete record.</p>
-      <p class="body" style="margin-top:1em;font-size:.82em;color:var(--ink-3)">Status: draft PR under community discussion · standalone executor: github.com/zozo123/airflow-provider-sandbox</p>
+      <p class="body" style="margin-top:1em;font-size:.82em;color:var(--ink-3)">Status: open PR (not merged), the discussion anchor · standalone executor: github.com/zozo123/airflow-provider-sandbox</p>
     </div>
   </div>
 </section>
@@ -413,8 +413,8 @@ creation_batch_size = 8</pre>
   <div class="grow qgrid">
     <div class="qcard"><p>“My first main concern… is how would this integrate with Common AI Provider and why should it be separate provider instead of part of <i>common.ai</i>.”</p><div class="who">Kaxil Naik · converted PR to draft pending dev-list discussion</div></div>
     <div class="qcard"><p>“It likely requires an AIP… your current PR and implementation will be treated as one potential solution — and mostly a starting point.”</p><div class="who">Jarek Potiuk · plus: threat model required</div></div>
-    <div class="qcard"><p>“+1 to Kaxil’s comments… we discussed this offline earlier in the context of agentic workflows… interaction with the common.ai provider would be the logical first step.”</p><div class="who">Vikram Koka</div></div>
-    <div class="qcard" style="border-color:var(--green)"><p>So: the work pivots into <b>common.ai</b> as a <b>SandboxToolset</b> — a first-class toolset like SQLToolset / MCPToolset. Agent-written code runs <em>off the worker</em> — so it no longer executes with the worker’s credentials.</p><div class="who" style="color:var(--green)">The pivot · standalone executor lives on as a third-party package</div></div>
+    <div class="qcard"><p>“+1 to Kaxil’s comments… we discussed this offline earlier in the context of agentic workflows… interaction with the common.ai provider would be the logical first step.”</p><div class="who">Vikram Koka · on the dev@ thread</div></div>
+    <div class="qcard" style="border-color:var(--green)"><p>So: the work pivots into <b>common.ai</b> as a <b>SandboxToolset</b> (proposed) — a first-class toolset like SQLToolset / MCPToolset. Agent-written code runs <em>off the worker</em> — so it no longer executes with the worker’s credentials.</p><div class="who" style="color:var(--green)">The pivot · standalone executor lives on as a third-party package</div></div>
   </div>
 </section>
 
@@ -470,7 +470,7 @@ creation_batch_size = 8</pre>
 <script>
 /* ---- latency dot plot (log scale, positions computed) ---- */
 const ROWS = [
-  {name:"Fargate cold start",  sub:"per task · amazon-provider docs", ms:150000, show:"~2.5 min",  color:"var(--blue)"},
+  {name:"Fargate startup",     sub:"per task · amazon-provider docs", ms:55000,  show:"~50–60s",   color:"var(--blue)"},
   {name:"K8s pod per task",    sub:"schedule + pull + bootstrap",     ms:5000,   show:"secs–mins", color:"var(--blue)"},
   {name:"E2B sandbox create",  sub:"prewarmed Firecracker snapshot",  ms:150,    show:"~150 ms",   color:"var(--blue)"},
   {name:"Firecracker cold boot",sub:"minimal guest · AWS",            ms:125,    show:"~125 ms",   color:"var(--blue)"},
