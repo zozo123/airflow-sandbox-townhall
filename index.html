@@ -232,8 +232,8 @@
     <blockquote>“Airflow lacks native sandboxing mechanisms… DAG authors can execute arbitrary code on workers.”
       <span class="who">— Airflow security model docs. Mitigation: code review.</span>
     </blockquote>
-    <p class="body">That model assumed a human wrote and reviewed every task. With the <b style="color:var(--ink)">common.ai</b> provider, AI agents now write task code at runtime — and Airflow runs it <b style="color:var(--red)">on the worker, with the worker’s credentials</b>, reviewed by no one.</p>
-    <p class="body" style="margin-top:1.6vh">Agents also read the outside world, and an LLM can’t tell instructions from data — <em>anything it reads can steer the code it writes</em>. The fix: a <b style="color:var(--ink)">sandbox</b> — a tiny, throwaway computer per task try, deleted when the task ends.</p>
+    <p class="body">That model assumed a human wrote and reviewed every task. With <b style="color:var(--ink)">common.ai</b> (Airflow’s provider for AI-agent tasks), agents now write task code at runtime — and Airflow runs it <b style="color:var(--red)">on the worker, with the worker’s credentials</b>, reviewed by no one.</p>
+    <p class="body" style="margin-top:1.6vh">Agents also read the outside world, and an LLM can’t tell instructions from data — <em>anything it reads can steer the code it writes</em>. The fix: a <b style="color:var(--ink)">sandbox</b> — a microVM, a tiny full computer that boots in milliseconds, created per task try and deleted when it ends.</p>
   </div>
   <p class="footline">airflow.apache.org/docs/…/security/security_model.html</p>
 </section>
@@ -316,7 +316,7 @@
       <li><b>Modal:</b> <code>import torch</code> — ~5 s cold → <b class="num">~1.05 s</b> from a memory snapshot.</li>
       <li><b>Cognition (Devin):</b> 20 GB machine snapshot — ~30 min → <b class="num">~200 ms</b> with blockdiff.</li>
       <li><b>Morph:</b> fork a <em>running</em> VM — processes, memory, in-flight state — in <b class="num">&lt; 250 ms</b>.</li>
-      <li><b>AWS Lambda MicroVMs</b> (Jun 22): Firecracker sandboxes built to “safely run code that the application developer did not write” — near-instant launch/resume. One task, one VM is now an AWS primitive.</li>
+      <li><b>AWS Lambda MicroVMs</b> (Jun 2026): Firecracker sandboxes built to “safely run code that the application developer did not write” — near-instant launch/resume. One task, one VM is now an AWS primitive.</li>
       <li><b>Copy-on-write economics:</b> N forks ≈ 1 parent’s memory + deltas. One-sandbox-per-task becomes affordable.</li>
     </ul>
   </div>
@@ -333,7 +333,7 @@
       <div class="arrow">→</div>
       <div class="node t"><h4>SandboxExecutor</h4><p>Creates a sandbox per try, uploads the workload, then only reconciles <em>exit state</em> via a polling watcher.</p></div>
       <div class="arrow">→</div>
-      <div class="node g"><h4>MicroVM sandbox</h4><p>The task reports its own heartbeats and logs straight back to Airflow (EdgeExecutor-style) — no extra plumbing on the worker.</p></div>
+      <div class="node g"><h4>microVM sandbox</h4><p>The task reports its own heartbeats and logs straight back to Airflow (EdgeExecutor-style) — no extra plumbing on the worker.</p></div>
       <div class="arrow">→</div>
       <div class="node r"><h4>Destroy</h4><p>Task ends, sandbox dies. Nothing to clean, nothing to leak into the next try.</p></div>
     </div>
@@ -358,13 +358,13 @@
       <div class="be">local<small>subprocess · no creds · dev</small></div>
       <div class="be">Daytona<small>sub-90 ms create (vendor, best case) · snapshots</small></div>
       <div class="be">E2B<small>Firecracker · ~150 ms create</small></div>
-      <div class="be">Modal<small>gVisor · memory snapshots</small></div>
+      <div class="be">Modal<small>gVisor (sandboxed runtime) · memory snapshots</small></div>
       <div class="be">islo<small>ours — Incredibuild · microVM · islo.dev</small></div>
     </div>
     <p class="kicker" style="margin:2.6vh 0 1vh">Same shape across the ecosystem — any backend can plug in</p>
     <div class="backends" style="margin-top:0">
       <div class="be">Tensorlake<small>“sandbox-native cloud for agents” · fork/suspend microVMs</small></div>
-      <div class="be">AWS Lambda MicroVMs<small>Firecracker · “near-instant launch/resume” · new Jun 2026</small></div>
+      <div class="be">AWS Lambda MicroVMs<small>Firecracker · new Jun 2026</small></div>
       <div class="be">crabbox.sh<small>OSS contract · lease → sync → run → release · dozens of backends</small></div>
     </div>
   </div>
@@ -414,7 +414,7 @@ creation_batch_size = 8</pre>
     <div class="qcard"><p>“My first main concern… is how would this integrate with Common AI Provider and why should it be separate provider instead of part of <i>common.ai</i>.”</p><div class="who">Kaxil Naik · converted PR to draft pending dev-list discussion</div></div>
     <div class="qcard"><p>“It likely requires an AIP… your current PR and implementation will be treated as one potential solution — and mostly a starting point.”</p><div class="who">Jarek Potiuk · plus: threat model required</div></div>
     <div class="qcard"><p>“+1 to Kaxil’s comments… we discussed this offline earlier in the context of agentic workflows… interaction with the common.ai provider would be the logical first step.”</p><div class="who">Vikram Koka</div></div>
-    <div class="qcard" style="border-color:var(--green)"><p>So: the work pivots into <b>common.ai</b> as a <b>SandboxToolset</b> — a first-class toolset like SQLToolset / MCPToolset. Agent <code>run_code</code> executes <em>off the worker</em>, closing the <code>code_mode</code> credential gap.</p><div class="who" style="color:var(--green)">The pivot · standalone executor lives on as a third-party package</div></div>
+    <div class="qcard" style="border-color:var(--green)"><p>So: the work pivots into <b>common.ai</b> as a <b>SandboxToolset</b> — a first-class toolset like SQLToolset / MCPToolset. Agent-written code runs <em>off the worker</em> — so it no longer executes with the worker’s credentials.</p><div class="who" style="color:var(--green)">The pivot · standalone executor lives on as a third-party package</div></div>
   </div>
 </section>
 
@@ -434,7 +434,7 @@ creation_batch_size = 8</pre>
     <div>
       <span class="tag go">today, zero airflow changes</span>
       <ul class="plain">
-        <li>gVisor / Kata via <code>runtimeClassName</code> in a KubernetesExecutor <code>pod_override</code></li>
+        <li>gVisor / Kata (sandboxed container runtimes) via <code>runtimeClassName</code> in a KubernetesExecutor <code>pod_override</code></li>
         <li>gVisor (Google’s sandboxed container runtime) runs on any K8s cluster today — no special hardware, modest overhead; GKE Sandbox is the managed flavor</li>
         <li>Route only sensitive tasks there with multiple executors (AIP-61)</li>
       </ul>
