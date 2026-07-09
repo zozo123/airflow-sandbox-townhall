@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>New Sandbox provider for ephemeral task isolation — Airflow Town Hall, July 2026</title>
-<meta name="description" content="One ephemeral microVM per Airflow task try — slides from the Apache Airflow Monthly Virtual Town Hall, July 10, 2026. PR apache/airflow#68847.">
+<meta name="description" content="One ephemeral microVM per Airflow task try for fast fan-out/fan-in and controlled untrusted execution — Apache Airflow Town Hall, July 10, 2026. PR apache/airflow#68847.">
 <meta property="og:title" content="New Sandbox provider for ephemeral task isolation">
-<meta property="og:description" content="One ephemeral microVM per Airflow task try — Apache Airflow Town Hall, July 10, 2026. Navigate with arrow keys.">
+<meta property="og:description" content="Fan out work in milliseconds and run untrusted code in fresh sandboxes — Apache Airflow Town Hall, July 10, 2026.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://zozo123.github.io/airflow-sandbox-townhall/">
 <meta property="og:image" content="https://zozo123.github.io/airflow-sandbox-townhall/og-image.png">
@@ -15,7 +15,7 @@
 <meta property="og:image:alt" content="Title slide: New Sandbox provider for ephemeral task isolation — run code you don’t trust at the speed of code you do">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="New Sandbox provider for ephemeral task isolation">
-<meta name="twitter:description" content="One ephemeral microVM per Airflow task try — Apache Airflow Town Hall, July 10, 2026.">
+<meta name="twitter:description" content="Fan out work in milliseconds and run untrusted code in fresh sandboxes — Apache Airflow Town Hall, July 10, 2026.">
 <meta name="twitter:image" content="https://zozo123.github.io/airflow-sandbox-townhall/og-image.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1016'/%3E%3Ccircle cx='10' cy='10' r='4' fill='%232E90EF'/%3E%3Ccircle cx='22' cy='10' r='4' fill='%230099A8'/%3E%3Ccircle cx='10' cy='22' r='4' fill='%2321B056'/%3E%3Ccircle cx='22' cy='22' r='4' fill='%23E8502F'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -128,6 +128,18 @@
   .big{
     font-family:var(--serif);font-size:clamp(26px,2.6vw,42px);line-height:1.25;max-width:30em
   }
+  .use-grid{display:grid;grid-template-columns:1fr 1fr;gap:2.4vw;margin-top:1vh}
+  .use-card{
+    border:1px solid var(--line);border-radius:16px;background:var(--bg-raise);
+    padding:1.5em 1.7em;min-height:0
+  }
+  .use-card h3{font-family:var(--serif);font-weight:400;font-size:clamp(22px,2.2vw,38px);line-height:1.12;margin:.25em 0 .55em}
+  .use-card p{color:var(--ink-2);font-size:.9em}
+  .use-card ul{list-style:none;margin-top:1em}
+  .use-card li{position:relative;padding:.34em 0 .34em 1.35em;color:var(--ink-2);font-size:.84em}
+  .use-card li::before{content:"";position:absolute;left:0;top:.95em;width:.55em;height:1px;background:var(--teal)}
+  .use-card.fast{border-color:rgba(33,176,86,.55)}
+  .use-card.safe{border-color:rgba(232,80,47,.55)}
   .num{color:var(--green)}
   .steps{list-style:none;counter-reset:s}
   .steps li{
@@ -196,6 +208,7 @@
   @media (max-aspect-ratio: 4/3){
     .c2{grid-template-columns:1fr}
     .qgrid{grid-template-columns:1fr}
+    .use-grid{grid-template-columns:1fr}
     .flow{flex-direction:column}
     .arrow{transform:rotate(90deg);padding:.4em 0;text-align:center}
     .prow{grid-template-columns:8.5em 1fr}
@@ -217,7 +230,7 @@
     <p class="kicker">Apache Airflow · Monthly Virtual Town Hall · <b>July 10, 2026</b></p>
     <h1>New Sandbox provider for<br><em>ephemeral task isolation</em></h1>
     <hr class="rule" style="max-width:38ch">
-    <p class="body" style="font-family:var(--serif);font-size:clamp(18px,1.8vw,28px);color:var(--ink);max-width:none">Run code you <em style="color:var(--red)">don’t trust</em> at the speed of code you <em style="color:var(--green)">do</em>.</p>
+    <p class="body" style="font-family:var(--serif);font-size:clamp(18px,1.8vw,28px);color:var(--ink);max-width:none">Fan out work in <em style="color:var(--green)">milliseconds</em>. Run code you <em style="color:var(--red)">don’t trust</em> in a fresh computer.</p>
     <p class="body" style="margin-top:1.2vh">One fresh microVM per task try. Destroyed when the task ends.<br>
     <span style="color:var(--ink-3)">apache/airflow <a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener"><b style="color:var(--teal)">#68847</b></a> · issue <a href="https://github.com/apache/airflow/issues/68845" target="_blank" rel="noopener"><b style="color:var(--teal)">#68845</b></a> · <a href="https://lists.apache.org/list.html?dev@airflow.apache.org" target="_blank" rel="noopener">dev@airflow discussion</a></span></p>
   </div>
@@ -275,20 +288,34 @@
   </div>
 </section>
 
-<!-- ─────────────────────────── 5 · THE BIGGER PICTURE ─────────────────────────── -->
+<!-- ─────────────────────────── 5 · THE TWO USE CASES ─────────────────────────── -->
 <section class="slide">
-  <p class="kicker">04 · The bigger picture</p>
-  <h2>The unit of isolation shrank <em>to the task</em></h2>
+  <p class="kicker">04 · The primitive</p>
+  <h2>Two Airflow use cases, <em>one disposable computer</em></h2>
   <div class="grow">
-    <div class="flow">
-      <div class="node b"><h4>VM</h4><p>A whole machine. Strong wall — but heavy, slow to boot.</p></div>
-      <div class="arrow">→</div>
-      <div class="node t"><h4>Container</h4><p>A service. Fast and dense — but shares one kernel.</p></div>
-      <div class="arrow">→</div>
-      <div class="node g"><h4>Sandbox</h4><p>One task try. Fast <em>and</em> isolated — then gone.</p></div>
+    <div class="use-grid">
+      <div class="use-card fast">
+        <span class="tag go">fast fan-out / fan-in</span>
+        <h3>Milliseconds to N workers</h3>
+        <p>Start a hot snapshot, fork it across mapped tasks, collect artifacts or XComs, then delete every machine.</p>
+        <ul>
+          <li>Eval shards, test shards, data probes, notebook cells, package-heavy Python.</li>
+          <li>Copy-on-write means N sandboxes cost one warm parent plus deltas.</li>
+          <li>Retries get clean computers instead of polluted workers.</li>
+        </ul>
+      </div>
+      <div class="use-card safe">
+        <span class="tag hot">controlled untrusted execution</span>
+        <h3>A sandbox, plus a gate</h3>
+        <p>Agent-written code, tenant code, partner scripts, and eval contestants run off the worker with scoped egress.</p>
+        <ul>
+          <li>No worker credentials in sandbox memory by default.</li>
+          <li>Gateway injects allowed secrets per request and audits the call.</li>
+          <li>Network allow/deny rules define what the code can touch.</li>
+        </ul>
+      </div>
     </div>
-    <p class="big" style="margin-top:5.5vh">Stop <em>provisioning</em> compute — <em style="color:var(--green)">instantiate</em> it: one machine per task, then throw it away.</p>
-    <p class="body" style="margin-top:2.2vh;font-size:1.05em;color:var(--ink);max-width:none">Airflow already thinks in tasks. The runtime finally matches the DAG.</p>
+    <p class="big" style="margin-top:4.8vh">Airflow already has the shape: map out, fan in, retry, teardown. The missing part is the <em>per-try computer</em>.</p>
   </div>
   <p class="footline">The whole shift in one line: “the efficiency of multitenancy with the security of single tenancy.” — Modal</p>
 </section>
@@ -345,7 +372,7 @@
 <!-- ─────────────────────────── 8 · BACKENDS ─────────────────────────── -->
 <section class="slide">
   <p class="kicker">08 · Pluggable backends</p>
-  <h2>One contract, <em>any</em> sandbox vendor</h2>
+  <h2>One contract, many <em>vendor promises</em></h2>
   <div class="grow">
     <pre>SandboxProvider          <span class="cm"># abstract base — backends/base.py</span>
   authenticate() → create_sandbox(<span class="f">spec</span>) → upload_workload()
@@ -356,19 +383,20 @@
 <span class="cm"># UNKNOWN ≠ GONE — transient API blips never kill a healthy task</span></pre>
     <div class="backends">
       <div class="be">local<small>subprocess · no creds · dev</small></div>
-      <div class="be">Daytona<small>sub-90 ms create (vendor, best case) · snapshots</small></div>
-      <div class="be">E2B<small>Firecracker · ~150 ms create</small></div>
+      <div class="be">Daytona<small>sub-90 ms create · snapshots · network controls</small></div>
+      <div class="be">E2B<small>Firecracker · ~150 ms create · AI code runtime</small></div>
       <div class="be">Modal<small>gVisor (sandboxed runtime) · memory snapshots</small></div>
-      <div class="be">islo<small>ours — Incredibuild · microVM · islo.dev</small></div>
+      <div class="be">islo<small>ours — microVM agent computer · gatewayed secrets</small></div>
     </div>
-    <p class="kicker" style="margin:2.6vh 0 1vh">Same shape across the ecosystem — any backend can plug in</p>
+    <p class="kicker" style="margin:2.6vh 0 1vh">Same shape across the ecosystem — instant sandboxes and agent computers are converging</p>
     <div class="backends" style="margin-top:0">
       <div class="be">Tensorlake<small>“sandbox-native cloud for agents” · fork/suspend microVMs</small></div>
       <div class="be">AWS Lambda MicroVMs<small>Firecracker · new Jun 2026</small></div>
+      <div class="be">exe.dev<small>KVM VMs · SSH/root/systemd · gatewayed integrations</small></div>
       <div class="be">crabbox.sh<small>OSS contract · lease → sync → run → release · dozens of backends</small></div>
     </div>
   </div>
-  <p class="footline">Config: <code>[sandbox] provider = local|daytona|e2b|modal|islo</code> — or any <code>module:Class</code> path · contract mirrors crabbox’s (MIT)</p>
+  <p class="footline">Config: <code>[sandbox] provider = local|daytona|e2b|modal|islo</code> — or any <code>module:Class</code> path · exe.dev/Tensorlake/AWS/crabbox are market signals, not current PR backends</p>
 </section>
 
 <!-- ─────────────────────────── 9 · CODE ─────────────────────────── -->
@@ -427,7 +455,7 @@ creation_batch_size = 8</pre>
       <span class="tag hot">still open</span>
       <ul class="plain">
         <li>DAG processor &amp; Triggerer still hold DB credentials</li>
-        <li>Tasks can still read every secret their deployment can — per-task scoping is future work</li>
+        <li>Tasks can still read every secret their deployment can — per-task scoping or an egress gateway is future work</li>
         <li>Snapshot sharp edges: TCP connections die, cloned entropy needs VMGenID, GPU state largely unsnapshottable</li>
       </ul>
     </div>
@@ -455,7 +483,7 @@ creation_batch_size = 8</pre>
       <li><b>Dev-call demo</b>&nbsp;— live @task.sandbox run, warts and all</li>
     </ol>
     <div>
-      <p class="big">Read <a href="https://github.com/apache/airflow/issues/68845" target="_blank" rel="noopener" style="color:var(--teal)">#68845</a> &amp; <a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener" style="color:var(--teal)">#68847</a>.<br>Tell us your use case:<br><em>untrusted code? multi-tenant? agent tasks?</em></p>
+      <p class="big">Read <a href="https://github.com/apache/airflow/issues/68845" target="_blank" rel="noopener" style="color:var(--teal)">#68845</a> &amp; <a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener" style="color:var(--teal)">#68847</a>.<br>Tell us your use case:<br><em>fan-out/fan-in? untrusted code? gatewayed agents?</em></p>
       <p class="body" style="margin-top:2.5vh;font-size:.9em">Long-term maintainers committed (Yossi Eliaz, Yuval Raz — Incredibuild). Thanks to Elad Kalif (eladkal) for offering to sponsor, and to Kaxil, Jarek &amp; Vikram for the early steering.</p>
     </div>
   </div>
@@ -474,6 +502,7 @@ const ROWS = [
   {name:"K8s pod per task",    sub:"schedule + pull + bootstrap",     ms:5000,   show:"secs–mins", color:"var(--blue)"},
   {name:"E2B sandbox create",  sub:"prewarmed Firecracker snapshot",  ms:150,    show:"~150 ms",   color:"var(--blue)"},
   {name:"Firecracker cold boot",sub:"minimal guest · AWS",            ms:125,    show:"~125 ms",   color:"var(--blue)"},
+  {name:"Daytona sandbox",     sub:"snapshot create · vendor best case",ms:90,    show:"sub-90 ms", color:"var(--teal)"},
   {name:"Snapshot restore",    sub:"page-cache-warm · FC docs",       ms:30,     show:"5–30 ms",   color:"var(--green)", hot:true},
 ];
 const LO = Math.log10(3), HI = Math.log10(300000);
