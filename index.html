@@ -460,7 +460,7 @@ provider = e2b
 poll_interval = 5
 creation_batch_size = 8</pre>
       <p class="body" style="margin-top:1.6em;font-size:.9em">The callable returns the shell command that runs <em>inside</em> the sandbox; logs ship out before it dies, so every try leaves a complete record.</p>
-      <p class="body" style="margin-top:1em;font-size:.82em;color:var(--ink-3)">Status (Jul 2026): open PR. Update: <a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener">merged 2026-08-13</a> as SandboxToolset in common.ai · standalone executor: <a href="https://github.com/zozo123/airflow-provider-sandbox" target="_blank" rel="noopener">github.com/zozo123/airflow-provider-sandbox</a></p>
+      <p class="body" style="margin-top:1em;font-size:.82em;color:var(--ink-3)">Status (Jul 10, 2026): open PR, ready for review since Jun 29. Update: <a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener">merged 2026-08-13</a> as SandboxToolset in common.ai · standalone executor: <a href="https://github.com/zozo123/airflow-provider-sandbox" target="_blank" rel="noopener">github.com/zozo123/airflow-provider-sandbox</a></p>
     </div>
   </div>
 </section>
@@ -470,7 +470,7 @@ creation_batch_size = 8</pre>
   <p class="kicker">10 · What the community said — and the pivot</p>
   <h2>Feedback received. <em>Direction changed.</em></h2>
   <div class="grow qgrid">
-    <div class="qcard"><p>“My first main concern… is how would this integrate with Common AI Provider and why should it be separate provider instead of part of <i>common.ai</i>.”</p><div class="who">Kaxil Naik · converted PR to draft pending dev-list discussion</div></div>
+    <div class="qcard"><p>“My first main concern… is how would this integrate with Common AI Provider and why should it be separate provider instead of part of <i>common.ai</i>.”</p><div class="who">Kaxil Naik · Jun 24: converted PR to draft pending dev-list discussion</div></div>
     <div class="qcard"><p>“It likely requires an AIP… your current PR and implementation will be treated as one potential solution — and mostly a starting point.”</p><div class="who">Jarek Potiuk · plus: threat model required</div></div>
     <div class="qcard"><p>“+1 to Kaxil’s comments… we discussed this offline earlier in the context of agentic workflows… interaction with the common.ai provider would be the logical first step.”</p><div class="who">Vikram Koka · on the dev@ thread</div></div>
     <div class="qcard" style="border-color:var(--green)"><p>So: the work pivots into <b>common.ai</b> as a <b>SandboxToolset</b> (proposed; merged Aug 2026) — a first-class toolset like SQLToolset / MCPToolset. Agent-written code runs <em>off the worker</em> — so it no longer executes with the worker’s credentials.</p><div class="who" style="color:var(--green)">The pivot · standalone executor lives on as a third-party package</div></div>
