@@ -246,7 +246,8 @@
     .slide.active{overflow-y:auto}
     .grow{flex:1 0 auto;overflow-y:visible}
     .grow pre{flex:none}
-    #hud{justify-content:flex-end}
+    /* scrolling content passes under the counter instead of colliding with it */
+    #hud{justify-content:flex-end;left:0;right:0;bottom:0;padding:2.4em 7vw 3.6vh;pointer-events:none;background:linear-gradient(rgba(11,16,22,0),var(--bg) 1.8em)}
     #hud>span:first-child{display:none}
   }
 </style>
