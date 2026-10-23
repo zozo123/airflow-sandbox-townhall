@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>New Sandbox provider for ephemeral task isolation — Airflow Town Hall, July 2026</title>
-<meta name="description" content="One ephemeral microVM per Airflow task try for fast fan-out/fan-in and controlled untrusted execution — Apache Airflow Town Hall, July 10, 2026. PR apache/airflow#68847.">
+<title>Airflow Sandbox Provider (Town Hall 2026) — Yossi Eliaz</title>
+<meta name="description" content="Slides by Yossi Eliaz from the Apache Airflow Town Hall, July 10, 2026: one ephemeral microVM per task try for fan-out and untrusted code.">
+<meta name="author" content="Yossi Eliaz">
+<link rel="canonical" href="https://zozo123.github.io/airflow-sandbox-townhall/">
 <meta property="og:title" content="New Sandbox provider for ephemeral task isolation">
 <meta property="og:description" content="Fan out work in milliseconds and run untrusted code in fresh sandboxes — Apache Airflow Town Hall, July 10, 2026.">
 <meta property="og:type" content="website">
@@ -17,6 +19,25 @@
 <meta name="twitter:title" content="New Sandbox provider for ephemeral task isolation">
 <meta name="twitter:description" content="Fan out work in milliseconds and run untrusted code in fresh sandboxes — Apache Airflow Town Hall, July 10, 2026.">
 <meta name="twitter:image" content="https://zozo123.github.io/airflow-sandbox-townhall/og-image.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "New Sandbox provider for ephemeral task isolation",
+  "description": "Slides from the Apache Airflow Monthly Virtual Town Hall, July 10, 2026: one ephemeral microVM sandbox per Airflow task try, for fast fan-out/fan-in and controlled untrusted execution.",
+  "url": "https://zozo123.github.io/airflow-sandbox-townhall/",
+  "image": "https://zozo123.github.io/airflow-sandbox-townhall/og-image.png",
+  "datePublished": "2026-07-09",
+  "inLanguage": "en",
+  "author": {
+    "@type": "Person",
+    "name": "Yossi Eliaz",
+    "url": "https://yossieliaz.netlify.app/",
+    "sameAs": ["https://github.com/zozo123", "https://www.linkedin.com/in/yossi-eliaz/"]
+  },
+  "citation": "https://github.com/apache/airflow/pull/68847"
+}
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1016'/%3E%3Ccircle cx='10' cy='10' r='4' fill='%232E90EF'/%3E%3Ccircle cx='22' cy='10' r='4' fill='%230099A8'/%3E%3Ccircle cx='10' cy='22' r='4' fill='%2321B056'/%3E%3Ccircle cx='22' cy='22' r='4' fill='%23E8502F'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -84,7 +105,7 @@
   #bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--teal),var(--green));z-index:9;transition:width .3s ease}
   #hud{
     position:fixed;left:7vw;right:7vw;bottom:3.6vh;z-index:9;
-    display:flex;justify-content:space-between;align-items:baseline;
+    display:flex;justify-content:space-between;align-items:baseline;gap:1em;
     font-size:.7em;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
   }
   .dots{display:inline-flex;gap:6px;margin-left:14px;vertical-align:middle}
@@ -219,6 +240,14 @@
     th,td{padding:.5em .5em}
     .grow{overflow-y:auto}
   }
+  /* phones: keep dense slides reachable — the slide scrolls, .grow never shrinks below its content */
+  @media (max-width:600px){
+    .slide.active{overflow-y:auto}
+    .grow{flex:1 0 auto;overflow-y:visible}
+    .grow pre{flex:none}
+    #hud{justify-content:flex-end}
+    #hud>span:first-child{display:none}
+  }
 </style>
 </head>
 <body>
@@ -234,7 +263,7 @@
     <p class="body" style="margin-top:1.2vh">One fresh microVM per task try. Destroyed when the task ends.<br>
     <span style="color:var(--ink-3)">apache/airflow <a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener"><b style="color:var(--teal)">#68847</b></a> · issue <a href="https://github.com/apache/airflow/issues/68845" target="_blank" rel="noopener"><b style="color:var(--teal)">#68845</b></a> · <a href="https://lists.apache.org/list.html?dev@airflow.apache.org" target="_blank" rel="noopener">dev@airflow discussion</a></span></p>
   </div>
-  <p class="footline">Yossi Eliaz — Incredibuild &nbsp;·&nbsp; <span class="dots"><span class="pin b"></span> <span class="pin t"></span> <span class="pin g"></span> <span class="pin r"></span></span></p>
+  <p class="footline"><a href="https://yossieliaz.netlify.app/">Yossi Eliaz</a> — Incredibuild &nbsp;·&nbsp; <a href="https://zozo123.github.io/">more writing</a> &nbsp;·&nbsp; <span class="dots"><span class="pin b"></span> <span class="pin t"></span> <span class="pin g"></span> <span class="pin r"></span></span></p>
 </section>
 
 <!-- ─────────────────────────── 2 · WHY NOW ─────────────────────────── -->
@@ -248,7 +277,7 @@
     <p class="body">That model assumed a human wrote and reviewed every task. With <b style="color:var(--ink)">common.ai</b> (Airflow’s provider for AI-agent tasks), agents now write task code at runtime — and Airflow runs it <b style="color:var(--red)">on the worker, with the worker’s credentials</b>, reviewed by no one.</p>
     <p class="body" style="margin-top:1.6vh">Agents also read the outside world, and an LLM can’t tell instructions from data — <em>anything it reads can steer the code it writes</em>. The fix: a <b style="color:var(--ink)">sandbox</b> — a microVM, a tiny full computer that boots in milliseconds, created per task try and deleted when it ends.</p>
   </div>
-  <p class="footline">airflow.apache.org/docs/…/security/security_model.html</p>
+  <p class="footline"><a href="https://airflow.apache.org/docs/apache-airflow/stable/security/security_model.html" target="_blank" rel="noopener">airflow.apache.org/docs/…/security/security_model.html</a></p>
 </section>
 
 <!-- ─────────────────────────── 3 · WHERE WE STAND ─────────────────────────── -->
@@ -266,7 +295,7 @@
       <tr><td>ECS / Fargate executor</td><td>Container per task, Fargate by default. ~50–60s startup latency per task (amazon-provider docs).</td><td><span class="lvl hard">container · slow</span></td></tr>
     </table>
   </div>
-  <p class="footline">Sources: Airflow security-model, multi-team &amp; executor docs; amazon-provider ECS executor docs</p>
+  <p class="footline">Sources: Airflow <a href="https://airflow.apache.org/docs/apache-airflow/stable/security/security_model.html" target="_blank" rel="noopener">security-model</a>, multi-team &amp; executor docs; amazon-provider ECS executor docs</p>
 </section>
 
 <!-- ─────────────────────────── 4 · THE TRAP ─────────────────────────── -->
@@ -347,7 +376,7 @@
       <li><b>Copy-on-write economics:</b> N forks ≈ 1 parent’s memory + deltas. One-sandbox-per-task becomes affordable.</li>
     </ul>
   </div>
-  <p class="footline">modal.com/blog/mem-snapshots · cognition.ai blockdiff · morph.so/blog/infinibranch · aws.amazon.com/lambda/lambda-microvms</p>
+  <p class="footline"><a href="https://modal.com/blog/mem-snapshots" target="_blank" rel="noopener">modal.com/blog/mem-snapshots</a> · <a href="https://cognition.ai/blog/blockdiff" target="_blank" rel="noopener">cognition.ai blockdiff</a> · <a href="https://www.morph.so/blog/infinibranch" target="_blank" rel="noopener">morph.so/blog/infinibranch</a> · <a href="https://aws.amazon.com/lambda/lambda-microvms/" target="_blank" rel="noopener">aws.amazon.com/lambda/lambda-microvms</a></p>
 </section>
 
 <!-- ─────────────────────────── 7 · THE PROPOSAL ─────────────────────────── -->
@@ -366,7 +395,7 @@
     </div>
     <p class="body" style="margin-top:2vh">Plus <b style="color:var(--ink)">SandboxOperator</b> and <b style="color:var(--ink)">@task.sandbox</b> for per-task opt-in — mix executors per deployment (AIP-61) and route only untrusted or heavy tasks to sandboxes.</p>
   </div>
-  <p class="footline"><a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener">github.com/apache/airflow/pull/68847</a> · +3,216 lines · 54 files · docs, tests, example DAG</p>
+  <p class="footline"><a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener">github.com/apache/airflow/pull/68847</a> · at talk time (Jul 2026): +3,216 lines · 54 files · docs, tests, example DAG</p>
 </section>
 
 <!-- ─────────────────────────── 8 · BACKENDS ─────────────────────────── -->
@@ -429,7 +458,7 @@ provider = e2b
 poll_interval = 5
 creation_batch_size = 8</pre>
       <p class="body" style="margin-top:1.6em;font-size:.9em">The callable returns the shell command that runs <em>inside</em> the sandbox; logs ship out before it dies, so every try leaves a complete record.</p>
-      <p class="body" style="margin-top:1em;font-size:.82em;color:var(--ink-3)">Status: open PR (not merged), the discussion anchor · standalone executor: github.com/zozo123/airflow-provider-sandbox</p>
+      <p class="body" style="margin-top:1em;font-size:.82em;color:var(--ink-3)">Status (Jul 2026): open PR. Update: <a href="https://github.com/apache/airflow/pull/68847" target="_blank" rel="noopener">merged 2026-08-13</a> as SandboxToolset in common.ai · standalone executor: <a href="https://github.com/zozo123/airflow-provider-sandbox" target="_blank" rel="noopener">github.com/zozo123/airflow-provider-sandbox</a></p>
     </div>
   </div>
 </section>
@@ -529,6 +558,7 @@ let cur=Math.min(Math.max((parseInt(location.hash.slice(1))||1)-1,0),slides.leng
 function show(n){
   cur=Math.min(Math.max(n,0),slides.length-1);
   slides.forEach((s,i)=>s.classList.toggle("active",i===cur));
+  slides[cur].scrollTop=0;
   document.getElementById("counter").textContent=String(cur+1).padStart(2,"0")+" / "+slides.length;
   document.getElementById("bar").style.width=((cur+1)/slides.length*100)+"%";
   const h="#"+(cur+1);
