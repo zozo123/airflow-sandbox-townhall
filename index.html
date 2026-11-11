@@ -250,7 +250,22 @@
     #hud{justify-content:flex-end;left:0;right:0;bottom:0;padding:2.4em 7vw 3.6vh;pointer-events:none;background:linear-gradient(rgba(11,16,22,0),var(--bg) 1.8em)}
     #hud>span:first-child{display:none}
   }
+  /* print: every slide, one per page */
+  @media print{
+    html,body{height:auto}
+    body{overflow:visible}
+    .slide{position:relative;display:flex;break-after:page}
+    .slide.active{animation:none}
+    #bar,#hud{display:none}
+  }
 </style>
+<noscript><style media="screen">
+  /* no JavaScript: every slide, in order, on one scrolling page */
+  html,body{height:auto}
+  body{overflow:auto}
+  .slide{position:relative;display:flex;min-height:100vh}
+  #hud{display:none}
+</style></noscript>
 </head>
 <body>
 <div id="bar"></div>
